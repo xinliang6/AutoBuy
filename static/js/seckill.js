@@ -108,19 +108,18 @@ async function startTask() {
         } catch (error) {
             alert('请求失败：' + error.message);
         }
-    } else if (currentPlatform === 'tb') {
+    } else {
+		// 1. 获取格式化后的时间
         const targetTime = getFormattedTime();
-        if (!targetTime) {
-            return;
-        }
-
+        if (!targetTime) return;
+		
         try {
             const response = await fetch('/api/tb/start', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ target_time: targetTime })
+				body: JSON.stringify({ target_time: targetTime })
             });
 
             const data = await response.json();
@@ -129,7 +128,6 @@ async function startTask() {
                 currentTaskId = data.task_id;
                 document.getElementById('startBtn').disabled = true;
                 document.getElementById('stopBtn').disabled = false;
-                disableTimeInputs(true);
                 document.querySelectorAll('input[name="platform"]').forEach(radio => radio.disabled = true);
                 updateStatus('running');
                 updateSteps(1);
@@ -304,25 +302,11 @@ function startLogStream() {
 
 function addLog(message, time = null) {
     const logContainer = document.getElementById('logContainer');
-
-    // 检测消息是否以 [网络时间] 开头，如 "[10:59:52] 距离抢购还有 8秒..."
-    const networkTimeMatch = message.match(/^\[(\d{2}:\d{2}:\d{2})\]\s*/);
-    let timestamp;
-    let displayMessage;
-
-    if (networkTimeMatch) {
-        // 使用消息中嵌入的网络时间
-        timestamp = networkTimeMatch[1];
-        displayMessage = message.substring(networkTimeMatch[0].length);
-    } else {
-        // 使用后端传入的时间或本地时间
-        timestamp = time || getCurrentTime();
-        displayMessage = message;
-    }
+    const timestamp = time || getCurrentTime();
 
     const logEntry = document.createElement('div');
     logEntry.className = 'log-entry';
-    logEntry.innerHTML = `<span class="log-time">${timestamp}</span>${displayMessage}`;
+    logEntry.innerHTML = `<span class="log-time">${timestamp}</span>${message}`;
 
     logContainer.appendChild(logEntry);
     logContainer.scrollTop = logContainer.scrollHeight;

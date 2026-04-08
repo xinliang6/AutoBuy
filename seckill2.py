@@ -186,7 +186,7 @@ class TimeManager:
         return 0
 
     @staticmethod
-    def adjust_target_time(target_time_str: str, platform: str, offset: float = -0.05) -> float:
+    def adjust_target_time(target_time_str: str, platform: str, offset: float = -0.035) -> float:
         """
         将字符串时间转为时间戳，并应用微小的提前偏移量
         :param offset: 提前执行的秒数（推荐 0.05 即 50ms），用于抵消系统损耗
@@ -202,7 +202,7 @@ class TimeManager:
 
             # 减去微小的偏移量（提前 50ms 触发点击指令）
             target_timestamp -= offset
-
+            
             return target_timestamp
         except Exception as e:
             logger.error(f"转换时间失败: {e}")
@@ -229,9 +229,6 @@ class SeckillWorker:
         # 使用字典来存储确认状态，避免属性访问问题
         self._confirm_states = {}
         self.log_callback: Callable[[str], None] = log_callback or logger.info
-
-        # 新增测试参数, 默认开启测试模式
-        self.test_mode = False
 
     def log(self, message: str):
         """记录日志"""
@@ -370,48 +367,36 @@ class SeckillWorker:
                 pass
 
     def _perform_seckill(self, max_retries: int = 30):
-        """执行抢购：带模拟延迟和测试模式的版本"""
+        """执行抢购：优化点击轨迹以绕过风控"""
         from selenium.webdriver.common.action_chains import ActionChains
-        if self.test_mode:
-            self.log(f">>> 抢购流程启动（测试模式: {self.test_mode}）")
-        else:
-            self.log(f">>> 时间到达，执行{self.config.name}抢购！")
+
+        self.log(f">>> 时间到达，执行{self.config.name}抢购！")
 
         # --- 阶段 1: 结算 ---
         try:
-            settle_btn = self.driver.find_element(By.CLASS_NAME, self.config.settle_button_class)
-            # 模拟延迟
-
-            self._click_element_safely(settle_btn)
-            self.log("✓ 阶段 1 成功：已点击[结算]")
+            # 找到结算按钮
+            btn = self.driver.find_element(By.CLASS_NAME, self.config.settle_button_class)
+            # 模拟人类：先移动过去，再点击
+            ActionChains(self.driver).move_to_element(btn).click().perform()
+            self.log("✓ 阶段 1 成功：已点击结算")
         except Exception as e:
-            self.log(f"✗ 阶段 1 失败: 未能找到结算按钮")
+            self.log(f"✗ 阶段 1 失败: {e}")
             return False
 
         # --- 阶段 2: 提交订单 ---
-        self.log(f"等待跳转，准备执行阶段 2 ")
-
+        self.log("等待跳转到提交页面...")
         for i in range(max_retries * 2):
             if not self.running: break
             try:
                 submit_btn = self.driver.find_element(By.CLASS_NAME, self.config.submit_button_css)
                 if submit_btn.is_displayed():
-                    # 找到按钮后先“预热”：将其背景变为红色，方便肉眼确认
-                    self.driver.execute_script("arguments[0].style.border='5px solid red';", submit_btn)
-
-                    if self.test_mode:
-                        self.log("📢 [测试模式] 脚本已成功定位[提交订单]按钮，模拟点击跳过")
-                        self.log(f"本地时间:{datetime.datetime.now()}")
-                        return True
-                    else:
-                        if self._click_element_safely(submit_btn):
-                            self.log("🚀 [实战模式] 订单提交指令已发出！")
-                            self.log(f"本地时间:{datetime.datetime.now()}")
-                            return True
+                    # 再次模拟人类点击
+                    ActionChains(self.driver).move_to_element(submit_btn).click().perform()
+                    self.log("✓ 阶段 2 成功：已提交订单！")
+                    return True
             except:
                 pass
             time.sleep(0.05)
-
         return False
 
     def start_seckill(

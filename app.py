@@ -11,8 +11,8 @@ from seckill import SeckillWorker
 
 # 设置项目根目录
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
-DRIVERS_DIR = os.path.join(PROJECT_DIR, 'drivers')
-
+# DRIVERS_DIR = os.path.join(PROJECT_DIR, 'drivers')
+DRIVERS_DIR = "C:\\Program Files\\Google\\Chrome\\Application\\chromedriver.exe"
 app = Flask(__name__)
 
 # 配置日志
@@ -29,7 +29,7 @@ class TaskManager:
         self.tasks = {}
         self.task_counter = 0
 
-    def create_task(self, platform, target_time=None):
+    def create_task(self, platform):
         self.task_counter += 1
         task_id = f"task_{self.task_counter}"
         self.tasks[task_id] = {
@@ -40,7 +40,7 @@ class TaskManager:
             'driver': None,
             'running': False,
             'thread': None,
-            'target_time': target_time
+            'target_time': None
         }
         return task_id
 
@@ -133,8 +133,8 @@ def download_driver():
         logger.info("开始检查 Chrome 浏览器版本...")
         driver_manager = ChromeDriverManager()
         logger.info("正在下载匹配的 ChromeDriver...")
-        driver_path = driver_manager.install()
-
+        # driver_path = driver_manager.install()
+        driver_path = DRIVERS_DIR #我已下载相关驱动所以指定路径
         logger.info(f"ChromeDriver 准备完成，路径: {driver_path}")
 
         # 返回详细的消息
@@ -162,7 +162,7 @@ def start_jd():
     if not target_time:
         return jsonify({'error': '请设置抢购时间'}), 400
 
-    task_id = task_manager.create_task('jd', target_time)
+    task_id = task_manager.create_task('jd')
     thread = threading.Thread(target=run_seckill_task, args=(task_id, 'jd', target_time, 25))
     thread.daemon = True
     thread.start()
@@ -172,19 +172,27 @@ def start_jd():
 
 @app.route('/api/tb/start', methods=['POST'])
 def start_tb():
+    # task_id = task_manager.create_task('tb')
+    # thread = threading.Thread(target=run_seckill_task, args=(task_id, 'tb', None, 15))
+    # thread.daemon = True
+    # thread.start()
+    #
+    # return jsonify({'task_id': task_id, 'status': 'started'})
+    # 1. 获取前端传来的 JSON 数据
     data = request.json
     target_time = data.get('target_time')
 
+    # 2. 如果没传时间，报错返回（或者保持默认）
     if not target_time:
         return jsonify({'error': '请设置抢购时间'}), 400
 
-    task_id = task_manager.create_task('tb', target_time)
+    task_id = task_manager.create_task('tb')
+    # 3. 将 target_time 传入任务
     thread = threading.Thread(target=run_seckill_task, args=(task_id, 'tb', target_time, 15))
     thread.daemon = True
     thread.start()
 
     return jsonify({'task_id': task_id, 'status': 'started'})
-
 
 @app.route('/api/tasks/<task_id>/confirm', methods=['POST'])
 def confirm_stage(task_id):

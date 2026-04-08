@@ -1,6 +1,7 @@
 # 🛒 淘宝京东自动抢购工具
 
 [![GitHub Stars](https://img.shields.io/github/stars/HanphoneJan/AutoBuy?style=for-the-badge&color=FFD700&logo=github)](https://github.com/HanphoneJan/AutoBuy)
+[![GitHub License](https://img.shields.io/github/license/HanphoneJan/AutoBuy?style=for-the-badge&color=4169E1&logo=github)](https://github.com/HanphoneJan/AutoBuy/blob/main/LICENSE)
 [![Update Time](https://img.shields.io/badge/Last%20Update-2024.11.18-FF6347?style=for-the-badge&logo=clock)](https://github.com/HanphoneJan/AutoBuy/commits/main)
 
 ## 📌 项目简介
@@ -13,6 +14,7 @@
 ✅ 现代化 Web 界面，实时日志显示
 ✅ 驱动自动下载检测，无需手动配置
 ✅ 步骤式进度条，用户完全手动控制
+✅ 自动移除淘宝反爬虫遮罩层
 ✅ 无侵入式网页操作，安全稳定
 ⚠️ 注意：仅支持可添加购物车/进入提交订单页的商品，需手动完成付款步骤
 
@@ -193,16 +195,10 @@ http://localhost:5000
 若使用过程中遇到bug或有功能建议，欢迎通过以下方式反馈：
 
 - GitHub Issues：[https://github.com/HanphoneJan/AutoBuy/issues](https://github.com/HanphoneJan/AutoBuy/issues)
+- 项目仓库：[https://github.com/HanphoneJan/AutoBuy](https://github.com/HanphoneJan/AutoBuy)
 
 ---
 
-## Star History
-
-<a href="https://www.star-history.com/?repos=HanphoneJan%2FAutoBuy&type=date&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/image?repos=HanphoneJan/AutoBuy&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/image?repos=HanphoneJan/AutoBuy&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/image?repos=HanphoneJan/AutoBuy&type=date&legend=top-left" />
- </picture>
-</a>
-
+<p align="center">
+  <sub>🌟 觉得有用？欢迎 Star 支持一下～</sub>
+</p>

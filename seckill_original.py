@@ -61,8 +61,8 @@ PLATFORM_CONFIGS = {
         login_text='亲，请登录',
         cart_url='https://cart.taobao.com/cart.htm',
         settle_button_class='btn--QDjHtErD',
-        submit_button_css='btn--QDjHtErD',
-        confirm_button_css='btn--QDjHtErD'
+        submit_button_css='.go-btn',
+        confirm_button_css='.go-btn'
     ),
     'bb': PlatformConfig(
         name='哔哩哔哩',
@@ -92,13 +92,6 @@ class BrowserManager:
         options.add_argument("--disable-blink-features=AutomationControlled")
         options.add_experimental_option("excludeSwitches", ["enable-automation"])
         options.add_experimental_option("useAutomationExtension", False)
-
-
-        # 增加一些混淆参数
-        options.add_argument("--disable-infobars")
-        options.add_argument("--log-level=3")
-        # 强制启用 WebGL 渲染，防止指纹识别
-        options.add_argument("--ignore-certificate-errors")
 
         user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0 Safari/537.36"
         options.add_argument(f'user-agent={user_agent}')
@@ -134,15 +127,6 @@ class BrowserManager:
                 };
                 removeOverlay();
                 setInterval(removeOverlay, 500);
-            """
-        })
-
-        # 启动后执行一段 JS 屏蔽 webdriver 标志
-        driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
-            "source": """
-                Object.defineProperty(navigator, 'webdriver', {
-                  get: () => undefined
-                })
             """
         })
 
@@ -186,27 +170,24 @@ class TimeManager:
         return 0
 
     @staticmethod
-    def adjust_target_time(target_time_str: str, platform: str, offset: float = -0.05) -> float:
-        """
-        将字符串时间转为时间戳，并应用微小的提前偏移量
-        :param offset: 提前执行的秒数（推荐 0.05 即 50ms），用于抵消系统损耗
-        """
+    def adjust_target_time(target_time: str, platform: str, load_time: float = 0.5) -> str:
+        """根据平台调整目标时间"""
         try:
-            target_dt = datetime.datetime.strptime(target_time_str, "%Y-%m-%d %H:%M:%S.%f")
-            target_timestamp = target_dt.timestamp()
+            mstime_datetime = datetime.datetime.strptime(target_time, "%Y-%m-%d %H:%M:%S.%f")
 
-            # 加上时间差异校准
-            time_diff_ms = TimeManager.get_time_diff(platform)
-            # time_diff 是 local - server，所以 target 需要减去这个差值
-            target_timestamp += (time_diff_ms / 1000.0)
+            # 减去页面加载时间
+            mstime_datetime = mstime_datetime - datetime.timedelta(seconds=load_time - 0.1)
 
-            # 减去微小的偏移量（提前 50ms 触发点击指令）
-            target_timestamp -= offset
+            # 时间校准
+            time_diff = TimeManager.get_time_diff(platform)
+            if abs(time_diff) > 1000:
+                mstime_datetime = mstime_datetime - datetime.timedelta(milliseconds=time_diff - 100)
+                logger.info(f"时间校准：调整 {time_diff} 毫秒")
 
-            return target_timestamp
+            return mstime_datetime.strftime('%Y-%m-%d %H:%M:%S.%f')
         except Exception as e:
-            logger.error(f"转换时间失败: {e}")
-            return datetime.datetime.now().timestamp()
+            logger.error(f"调整时间失败: {e}")
+            return target_time
 
 
 class SeckillWorker:
@@ -229,9 +210,6 @@ class SeckillWorker:
         # 使用字典来存储确认状态，避免属性访问问题
         self._confirm_states = {}
         self.log_callback: Callable[[str], None] = log_callback or logger.info
-
-        # 新增测试参数, 默认开启测试模式
-        self.test_mode = False
 
     def log(self, message: str):
         """记录日志"""
@@ -349,70 +327,36 @@ class SeckillWorker:
                     time.sleep(0.1)
         return False
 
-    def _wait_for_target_time(self, target_timestamp: float):
-        """高精度等待到达目标时间戳"""
-        self.log(f"进入高精度等待模式...")
-
+    def _wait_for_target_time(self, target_time: str):
+        """等待到达目标时间"""
+        self.log(f"等待到达抢购时间 {target_time}...")
         while self.running:
-            now = time.time()
-            diff = target_timestamp - now
-
-            if diff <= 0:
+            now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
+            if now >= target_time:
                 break
-            elif diff > 1:
-                # 距离时间还远，大步长睡眠
-                time.sleep(0.5)
-            elif diff > 0.1:
-                # 距离小于1秒，小步长轮询
-                time.sleep(0.01)
-            else:
-                # 距离小于100ms，进入死循环（空转）卡点，保证毫秒级触发
-                pass
+            time.sleep(0.1)
 
-    def _perform_seckill(self, max_retries: int = 30):
-        """执行抢购：带模拟延迟和测试模式的版本"""
-        from selenium.webdriver.common.action_chains import ActionChains
-        if self.test_mode:
-            self.log(f">>> 抢购流程启动（测试模式: {self.test_mode}）")
-        else:
-            self.log(f">>> 时间到达，执行{self.config.name}抢购！")
+    def _perform_seckill(self, max_retries: int = 10):
+        """执行抢购"""
+        self.log("开始抢购！")
+        success = False
+        i = 0
 
-        # --- 阶段 1: 结算 ---
-        try:
-            settle_btn = self.driver.find_element(By.CLASS_NAME, self.config.settle_button_class)
-            # 模拟延迟
-
-            self._click_element_safely(settle_btn)
-            self.log("✓ 阶段 1 成功：已点击[结算]")
-        except Exception as e:
-            self.log(f"✗ 阶段 1 失败: 未能找到结算按钮")
-            return False
-
-        # --- 阶段 2: 提交订单 ---
-        self.log(f"等待跳转，准备执行阶段 2 ")
-
-        for i in range(max_retries * 2):
-            if not self.running: break
+        while self.running and not success and i < max_retries and self.driver:
             try:
-                submit_btn = self.driver.find_element(By.CLASS_NAME, self.config.submit_button_css)
-                if submit_btn.is_displayed():
-                    # 找到按钮后先“预热”：将其背景变为红色，方便肉眼确认
-                    self.driver.execute_script("arguments[0].style.border='5px solid red';", submit_btn)
+                btn = self.driver.find_element(By.CLASS_NAME, self.config.settle_button_class)
+                if self._click_element_safely(btn):
+                    self.log("✓ 抢购成功！请尽快付款")
+                    now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
+                    self.log(f"抢购时间：{now}")
+                    success = True
+            except Exception:
+                i += 1
+                time.sleep(0.1)
+                if i % 5 == 0:
+                    self.log(f"尝试中... 第{i}次")
 
-                    if self.test_mode:
-                        self.log("📢 [测试模式] 脚本已成功定位[提交订单]按钮，模拟点击跳过")
-                        self.log(f"本地时间:{datetime.datetime.now()}")
-                        return True
-                    else:
-                        if self._click_element_safely(submit_btn):
-                            self.log("🚀 [实战模式] 订单提交指令已发出！")
-                            self.log(f"本地时间:{datetime.datetime.now()}")
-                            return True
-            except:
-                pass
-            time.sleep(0.05)
-
-        return False
+        return success
 
     def start_seckill(
         self,
@@ -454,13 +398,18 @@ class SeckillWorker:
                     if not self._wait_for_user_confirm("cart"):
                         return
 
-            # 1. 获取目标时间戳（不再减去页面加载时间）
-            if target_time:
-                target_ts = TimeManager.adjust_target_time(target_time, self.platform)
-                self.log(f'目标时间戳：{target_ts} ')
+            # 测试页面加载时间
+            load_time = 0.5
+            if test_load_time and target_time:
+                load_time = self._test_page_load_time()
 
-                # 2. 高精度等待
-                self._wait_for_target_time(target_ts)
+            # 调整目标时间
+            if target_time:
+                target_time = TimeManager.adjust_target_time(target_time, self.platform, load_time)
+                self.log(f'调整后的抢购时间：{target_time}')
+
+                # 等待目标时间
+                self._wait_for_target_time(target_time)
 
             # 执行抢购
             success = self._perform_seckill()
